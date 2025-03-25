@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manajemen Data Alat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow flex flex-col md:flex-row gap-6">
+
+        <div class="md:w-1/3 bg-gray-50 p-4 rounded-lg shadow">
+            <h1 class="text-xl font-bold mb-4">Manajemen Data Alat</h1>
+            <input type="hidden" id="editIndex">
+            <input type="text" id="namaUnit" placeholder="Masukkan Nama Alat" class="border p-2 rounded w-full mb-2">
+            <select id="kategoriAset" class="border p-2 rounded w-full mb-2">
+                <option value="IT">IT</option>
+                <option value="KENDARAAN">KENDARAAN</option>
+                <option value="FURNITUR">FURNITUR</option>
+                <option value="OPERASIONAL">OPERASIONAL</option>
+            </select>
+            <input type="number" id="tahunPenggunaan" placeholder="Tahun Digunakan" class="border p-2 rounded w-full mb-2">
+            <input type="text" id="digunakanOleh" placeholder="Digunakan Oleh" class="border p-2 rounded w-full mb-2">
+            <select id="kondisi" class="border p-2 rounded w-full mb-2">
+                <option value="Baik">Baik</option>
+                <option value="Kurang Baik">Kurang Baik</option>
+                <option value="Rusak">Rusak</option>
+            </select>
+            <div class="flex gap-2">
+                <button onclick="simpanData()" id="btnSimpan" class="bg-blue-500 text-white p-2 rounded flex-1">Tambah</button>
+                <button onclick="batalEdit()" id="btnBatal" class="bg-gray-500 text-white p-2 rounded hidden">Batal</button>
+            </div>
+        </div>
+
+        <div class="md:w-2/3 bg-gray-50 p-4 rounded-lg shadow overflow-auto">
+            <div class="flex flex-col md:flex-row gap-4 mb-4">
+                <div class="flex-1">
+                    <input type="text" id="inputPencarian" placeholder="Cari berdasarkan nama atau kategori..." class="border p-2 rounded w-full">
+                </div>
+                <div class="flex gap-2">
+                    <select id="sortirBy" class="border p-2 rounded">
+                        <option value="">Urutkan</option>
+                        <option value="nama-asc">Nama (A-Z)</option>
+                        <option value="nama-desc">Nama (Z-A)</option>
+                        <option value="tahun-asc">Tahun (Terlama)</option>
+                        <option value="tahun-desc">Tahun (Terbaru)</option>
+                        <option value="kategori-asc">Kategori (A-Z)</option>
+                    </select>
+                    <button onclick="cariData()" class="bg-blue-500 text-white p-2 rounded">Cari</button>
+                </div>
+            </div>
+
+            <table class="w-full border-collapse border border-gray-300 text-sm">
+                <thead class="bg-gray-200 text-gray-700">
+                    <tr>
+                        <th class="border p-2">No</th>
+                        <th class="border p-2">Nama Unit</th>
+                        <th class="border p-2">Kode Unit</th>
+                        <th class="border p-2">Kategori</th>
+                        <th class="border p-2">Digunakan Tahun</th>
+                        <th class="border p-2">Pengguna</th>
+                        <th class="border p-2">Kondisi</th>
+                        <th class="border p-2">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            <button onclick="cetakPDF()" class="bg-green-500 text-white p-2 rounded mt-4">Cetak PDF</button>
+        </div>
+    </div>
+
+    <script>
+        let dataAlat = JSON.parse(localStorage.getItem("dataAlat")) || [];
+        let nomorUrut = dataAlat.length ? parseInt(dataAlat[dataAlat.length - 1].nomor) + 1 : 1;
+        let dataTampil = [...dataAlat];
+
+        function generateKodeUnit(nama, kategori) {
+            const kodePemilik = "PLA";
+            const kodeKategori = kategori.replace(/\s+/g, "").toUpperCase();
+            const kodeNama = nama.replace(/\s+/g, "").toUpperCase();
+            const nomorUnit = String(nomorUrut).padStart(3, '0');
+            return `${kodePemilik}-${kodeKategori}-${kodeNama}-${nomorUnit}-2025`;
+        }
+
+        function simpanData() {
+            const namaUnit = document.getElementById("namaUnit").value.trim();
+            const kategori = document.getElementById("kategoriAset").value;
+            const tahun = document.getElementById("tahunPenggunaan").value.trim();
+            const pengguna = document.getElementById("digunakanOleh").value.trim();
+            const kondisi = document.getElementById("kondisi").value;
+            const editIndex = document.getElementById("editIndex").value;
+            
+            if (!namaUnit || !tahun || !pengguna) {
+                alert("Semua field harus diisi!");
+                return;
+            }
+
+            if (editIndex === "") {
+                const kodeUnit = generateKodeUnit(namaUnit, kategori);
+                dataAlat.push({ nomor: nomorUrut, namaUnit, kodeUnit, kategori, tahun, pengguna, kondisi });
+                nomorUrut++;
+                localStorage.setItem("dataAlat", JSON.stringify(dataAlat));
+                alert("Data berhasil ditambahkan!");
+            } else {
+                const index = parseInt(editIndex);
+                dataAlat[index] = {
+                    ...dataAlat[index],
+                    namaUnit,
+                    kategori,
+                    tahun,
+                    pengguna,
+                    kondisi
+                };
+                localStorage.setItem("dataAlat", JSON.stringify(dataAlat));
+                alert("Data berhasil diperbarui!");
+                batalEdit();
+            }
+            
+            dataTampil = [...dataAlat];
+            tampilkanData();
+            resetForm();
+        }
+
+        function editData(index) {
+            const item = dataAlat[index];
+            document.getElementById("editIndex").value = index;
+            document.getElementById("namaUnit").value = item.namaUnit;
+            document.getElementById("kategoriAset").value = item.kategori;
+            document.getElementById("tahunPenggunaan").value = item.tahun;
+            document.getElementById("digunakanOleh").value = item.pengguna;
+            document.getElementById("kondisi").value = item.kondisi;
+            
+            document.getElementById("btnSimpan").textContent = "Update";
+            document.getElementById("btnBatal").classList.remove("hidden");
+        }
+
+        function batalEdit() {
+            resetForm();
+            document.getElementById("editIndex").value = "";
+            document.getElementById("btnSimpan").textContent = "Tambah";
+            document.getElementById("btnBatal").classList.add("hidden");
+        }
+
+        function resetForm() {
+            document.getElementById("namaUnit").value = "";
+            document.getElementById("kategoriAset").value = "IT";
+            document.getElementById("tahunPenggunaan").value = "";
+            document.getElementById("digunakanOleh").value = "";
+            document.getElementById("kondisi").value = "Baik";
+        }
+
+        function hapusData(index) {
+            if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+                dataAlat.splice(index, 1);
+                localStorage.setItem("dataAlat", JSON.stringify(dataAlat));
+                alert("Data berhasil dihapus!");
+                dataTampil = [...dataAlat];
+                tampilkanData();
+            }
+        }
+
+        function cariData() {
+            const keyword = document.getElementById("inputPencarian").value.toLowerCase();
+            const sortBy = document.getElementById("sortirBy").value;
+            
+            if (keyword) {
+                dataTampil = dataAlat.filter(item => 
+                    item.namaUnit.toLowerCase().includes(keyword) || 
+                    item.kategori.toLowerCase().includes(keyword)
+                );
+            } else {
+                dataTampil = [...dataAlat];
+            }
+            
+            if (sortBy) {
+                const [field, direction] = sortBy.split("-");
+                dataTampil.sort((a, b) => {
+                    let valA, valB;
+                    
+                    if (field === "tahun") {
+                        valA = parseInt(a[field]);
+                        valB = parseInt(b[field]);
+                    } else {
+                        valA = a[field].toLowerCase();
+                        valB = b[field].toLowerCase();
+                    }
+                    
+                    if (direction === "asc") {
+                        return valA > valB ? 1 : -1;
+                    } else {
+                        return valA < valB ? 1 : -1;
+                    }
+                });
+            }
+            
+            tampilkanData();
+        }
+
+        function tampilkanData() {
+            const tableBody = document.getElementById("tableBody");
+            tableBody.innerHTML = dataTampil.map((item, index) => `
+                <tr class="text-center">
+                    <td class="border p-2">${item.nomor}</td>
+                    <td class="border p-2">${item.namaUnit}</td>
+                    <td class="border p-2">${item.kodeUnit}</td>
+                    <td class="border p-2">${item.kategori}</td>
+                    <td class="border p-2">${item.tahun}</td>
+                    <td class="border p-2">${item.pengguna}</td>
+                    <td class="border p-2">${item.kondisi}</td>
+                    <td class="border p-2">
+                        <button onclick="editData(${dataAlat.findIndex(d => d.nomor === item.nomor)})" class="bg-yellow-500 text-white p-1 rounded mr-1">Edit</button>
+                        <button onclick="hapusData(${dataAlat.findIndex(d => d.nomor === item.nomor)})" class="bg-red-500 text-white p-1 rounded">Hapus</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function cetakPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+        
+            doc.setFontSize(16);
+            doc.setTextColor(40);
+            doc.setFont("helvetica", "bold");
+            doc.text("LAPORAN DATA ALAT", 105, 15, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Dicetak pada: ${new Date().toLocaleDateString()}`, 105, 22, { align: 'center' });
+            
+            const headers = [
+                "No", 
+                "Nama Unit", 
+                "Kode Unit", 
+                "Kategori", 
+                "Tahun", 
+                "Pengguna", 
+                "Kondisi"
+            ];
+            
+            const data = dataTampil.map(item => [
+                item.nomor,
+                item.namaUnit,
+                item.kodeUnit,
+                item.kategori,
+                item.tahun,
+                item.pengguna,
+                item.kondisi
+            ]);
+            
+            doc.autoTable({
+                head: [headers],
+                body: data,
+                startY: 30,
+                theme: 'grid',
+                headStyles: {
+                    fillColor: [41, 128, 185],
+                    textColor: 255,
+                    fontStyle: 'bold'
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 245, 245]
+                },
+                styles: {
+                    fontSize: 9,
+                    cellPadding: 3,
+                    overflow: 'linebreak'
+                },
+                margin: { top: 30 }
+            });
+        
+            const pageCount = doc.internal.getNumberOfPages();
+            for(let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(10);
+                doc.setTextColor(150);
+                doc.text(`Halaman ${i} dari ${pageCount}`, 105, doc.internal.pageSize.height - 10, { align: 'center' });
+            }
+            
+            doc.save("Laporan_Data_Alat.pdf");
+        }
+
+        document.getElementById("inputPencarian").addEventListener("keyup", function(event) {
+            if (event.key === "Enter") {
+                cariData();
+            }
+        });
+
+        tampilkanData();
+    </script>
+</body>
+</html>
