@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
 </head>
 <body class="bg-gray-100 p-6">
     <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow flex flex-col md:flex-row gap-6">
@@ -15,15 +17,18 @@
             <h1 class="text-xl font-bold mb-4">Manajemen Data Alat</h1>
             <input type="hidden" id="editIndex">
             
-            <div class="mb-4 p-2 bg-blue-50 rounded">
+            <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700">Kode Barang</label>
-                <div id="kodeBarangDisplay" class="font-mono text-blue-600">Isi semua field untuk generate kode</div>
+                <input type="text" id="kodeBarang" placeholder="Masukkan Kode Barang" class="border p-2 rounded w-full mb-2">
             </div>
             
-            <input type="text" id="namaBarang" placeholder="Nama Barang" class="border p-2 rounded w-full mb-2" oninput="generateKodeBarang()">
-            <input type="text" id="brand" placeholder="Brand" class="border p-2 rounded w-full mb-2" oninput="generateKodeBarang()">
+            <input type="text" id="namaBarang" placeholder="Nama Barang" class="border p-2 rounded w-full mb-2">
+            <input type="text" id="brand" placeholder="Brand" class="border p-2 rounded w-full mb-2">
+            <input type="text" id="deskripsi" placeholder="Deskripsi" class="border p-2 rounded w-full mb-2">
+            <input type="text" id="namaPengguna" placeholder="Nama Pengguna" class="border p-2 rounded w-full mb-2">
+            <input type="text" id="divisi" placeholder="Divisi" class="border p-2 rounded w-full mb-2">
             
-            <select id="kodeUnit" class="border p-2 rounded w-full mb-2" onchange="generateKodeBarang()">
+            <select id="kodeUnit" class="border p-2 rounded w-full mb-2">
                 <option value="">Pilih Kode Unit</option>
                 <option value="IT">IT</option>
                 <option value="ELEKTRONIK">ELEKTRONIK</option>
@@ -50,8 +55,15 @@
                 <option value="Perlu Perbaikan">Perlu Perbaikan</option>
             </select>
             
-            <input type="text" id="lokasi" placeholder="Lokasi" class="border p-2 rounded w-full mb-2">
-            <input type="number" id="tahunPengadaan" placeholder="Tahun Pengadaan" class="border p-2 rounded w-full mb-2" oninput="generateKodeBarang()">
+            <select id="lokasi" class="border p-2 rounded w-full mb-2">
+                <option value="">Pilih Lokasi</option>
+                <option value="HO">HO</option>
+                <option value="Site">Site</option>
+            </select>
+            
+            <input type="date" id="tanggalPembelian" class="border p-2 rounded w-full mb-2">
+            <input type="number" id="tahunPengadaan" placeholder="Tahun Pengadaan" class="border p-2 rounded w-full mb-2">
+            <input type="text" id="keterangan" placeholder="Keterangan" class="border p-2 rounded w-full mb-2">
             
             <div class="flex gap-2">
                 <button onclick="simpanData()" id="btnSimpan" class="bg-blue-500 text-white p-2 rounded flex-1">Tambah</button>
@@ -91,11 +103,32 @@
                         <th class="border p-2">Lokasi</th>
                         <th class="border p-2">Tahun</th>
                         <th class="border p-2">Aksi</th>
+                        <th class="border p-2">Barcode</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
             </table>
-            <button onclick="cetakPDF()" class="bg-green-500 text-white p-2 rounded mt-4">Cetak PDF</button>
+            <div class="flex gap-2 mt-4">
+                <button onclick="cetakPDF()" class="bg-green-500 text-white p-2 rounded">Cetak PDF</button>
+                <button onclick="cetakSemuaBarcode()" class="bg-purple-500 text-white p-2 rounded">Cetak Semua Barcode</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Barcode -->
+    <div id="barcodeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Informasi Barang</h2>
+                <button onclick="tutupModal()" class="text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+            <div id="barcodeContainer" class="flex justify-center mb-4">
+                <svg id="barcode"></svg>
+            </div>
+            <div id="itemInfo" class="space-y-2"></div>
+            <div class="mt-4 flex justify-end">
+                <button onclick="cetakBarcode()" class="bg-blue-500 text-white p-2 rounded">Cetak Barcode</button>
+            </div>
         </div>
     </div>
 
@@ -104,37 +137,21 @@
         let nomorUrut = dataAlat.length ? parseInt(dataAlat[dataAlat.length - 1].nomor) + 1 : 1;
         let dataTampil = [...dataAlat];
 
-        function generateKodeBarang() {
-            const namaBarang = document.getElementById("namaBarang").value.trim();
-            const brand = document.getElementById("brand").value.trim();
-            const kodeUnit = document.getElementById("kodeUnit").value;
-            const tahunPengadaan = document.getElementById("tahunPengadaan").value.trim();
-            
-            if (namaBarang && brand && kodeUnit && tahunPengadaan) {
-                const kodePemilik = "PLA";
-                const kodeNama = namaBarang.substring(0, 3).replace(/\s+/g, "").toUpperCase();
-                const kodeBrand = brand.substring(0, 3).replace(/\s+/g, "").toUpperCase();
-                const nomorUnit = String(nomorUrut).padStart(3, '0');
-                
-                const kodeBarang = `${kodePemilik}-${kodeUnit}-${kodeNama}${kodeBrand}-${nomorUnit}-${tahunPengadaan}`;
-                document.getElementById("kodeBarangDisplay").textContent = kodeBarang;
-                return kodeBarang;
-            } else {
-                document.getElementById("kodeBarangDisplay").textContent = "Isi semua field untuk generate kode";
-                return null;
-            }
-        }
-
         function simpanData() {
-            const kodeBarang = generateKodeBarang();
+            const kodeBarang = document.getElementById("kodeBarang").value.trim();
             const namaBarang = document.getElementById("namaBarang").value.trim();
             const brand = document.getElementById("brand").value.trim();
+            const deskripsi = document.getElementById("deskripsi").value.trim();
+            const namaPengguna = document.getElementById("namaPengguna").value.trim();
+            const divisi = document.getElementById("divisi").value.trim();
             const kodeUnit = document.getElementById("kodeUnit").value;
             const statusPajak = document.getElementById("statusPajak").value;
             const statusRiwayat = document.getElementById("statusRiwayat").value;
             const perawatan = document.getElementById("perawatan").value;
-            const lokasi = document.getElementById("lokasi").value.trim();
+            const lokasi = document.getElementById("lokasi").value;
+            const tanggalPembelian = document.getElementById("tanggalPembelian").value;
             const tahunPengadaan = document.getElementById("tahunPengadaan").value.trim();
+            const keterangan = document.getElementById("keterangan").value.trim();
             const editIndex = document.getElementById("editIndex").value;
             
             if (!kodeBarang || !namaBarang || !brand || !kodeUnit || !tahunPengadaan) {
@@ -148,12 +165,17 @@
                     kodeBarang,
                     namaBarang, 
                     brand,
+                    deskripsi,
+                    namaPengguna,
+                    divisi,
                     kodeUnit, 
                     statusPajak,
                     statusRiwayat,
                     perawatan,
                     lokasi,
-                    tahunPengadaan
+                    tanggalPembelian,
+                    tahunPengadaan,
+                    keterangan
                 });
                 nomorUrut++;
                 localStorage.setItem("dataAlat", JSON.stringify(dataAlat));
@@ -165,12 +187,17 @@
                     kodeBarang,
                     namaBarang, 
                     brand,
+                    deskripsi,
+                    namaPengguna,
+                    divisi,
                     kodeUnit, 
                     statusPajak,
                     statusRiwayat,
                     perawatan,
                     lokasi,
-                    tahunPengadaan
+                    tanggalPembelian,
+                    tahunPengadaan,
+                    keterangan
                 };
                 localStorage.setItem("dataAlat", JSON.stringify(dataAlat));
                 alert("Data berhasil diperbarui!");
@@ -185,17 +212,20 @@
         function editData(index) {
             const item = dataAlat[index];
             document.getElementById("editIndex").value = index;
+            document.getElementById("kodeBarang").value = item.kodeBarang;
             document.getElementById("namaBarang").value = item.namaBarang;
             document.getElementById("brand").value = item.brand;
+            document.getElementById("deskripsi").value = item.deskripsi || '';
+            document.getElementById("namaPengguna").value = item.namaPengguna || '';
+            document.getElementById("divisi").value = item.divisi || '';
             document.getElementById("kodeUnit").value = item.kodeUnit;
             document.getElementById("statusPajak").value = item.statusPajak;
             document.getElementById("statusRiwayat").value = item.statusRiwayat;
-            document.getElementById("perawatan").value = item.perawatan;
-            document.getElementById("lokasi").value = item.lokasi;
+            document.getElementById("perawatan").value = item.perawatan || '';
+            document.getElementById("lokasi").value = item.lokasi || '';
+            document.getElementById("tanggalPembelian").value = item.tanggalPembelian || '';
             document.getElementById("tahunPengadaan").value = item.tahunPengadaan;
-            
-            // Update kode barang display
-            document.getElementById("kodeBarangDisplay").textContent = item.kodeBarang;
+            document.getElementById("keterangan").value = item.keterangan || '';
             
             document.getElementById("btnSimpan").textContent = "Update";
             document.getElementById("btnBatal").classList.remove("hidden");
@@ -209,15 +239,20 @@
         }
 
         function resetForm() {
+            document.getElementById("kodeBarang").value = "";
             document.getElementById("namaBarang").value = "";
             document.getElementById("brand").value = "";
+            document.getElementById("deskripsi").value = "";
+            document.getElementById("namaPengguna").value = "";
+            document.getElementById("divisi").value = "";
             document.getElementById("kodeUnit").value = "";
             document.getElementById("statusPajak").value = "Bukan Barang Pajak";
             document.getElementById("statusRiwayat").value = "Tersedia-Digunakan";
             document.getElementById("perawatan").value = "";
             document.getElementById("lokasi").value = "";
+            document.getElementById("tanggalPembelian").value = "";
             document.getElementById("tahunPengadaan").value = "";
-            document.getElementById("kodeBarangDisplay").textContent = "Isi semua field untuk generate kode";
+            document.getElementById("keterangan").value = "";
         }
 
         function hapusData(index) {
@@ -288,10 +323,159 @@
                         <button onclick="editData(${dataAlat.findIndex(d => d.nomor === item.nomor)})" class="bg-yellow-500 text-white p-1 rounded mr-1">Edit</button>
                         <button onclick="hapusData(${dataAlat.findIndex(d => d.nomor === item.nomor)})" class="bg-red-500 text-white p-1 rounded">Hapus</button>
                     </td>
+                    <td class="border p-2">
+                        <button onclick="tampilkanBarcode('${item.kodeBarang}')" class="bg-blue-500 text-white p-1 rounded">Barcode</button>
+                    </td>
                 </tr>
             `).join('');
         }
 
+        function tampilkanBarcode(kodeBarang) {
+            const item = dataAlat.find(d => d.kodeBarang === kodeBarang);
+            if (!item) return;
+            
+            // Generate barcode
+            document.getElementById("barcode").innerHTML = "";
+            JsBarcode("#barcode", kodeBarang, {
+                format: "CODE128",
+                lineColor: "#000",
+                width: 2,
+                height: 50,
+                displayValue: true
+            });
+            
+            // Tampilkan informasi barang
+            document.getElementById("itemInfo").innerHTML = `
+                <p><strong>Kode Barang:</strong> ${item.kodeBarang}</p>
+                <p><strong>Nama Barang:</strong> ${item.namaBarang}</p>
+                <p><strong>Brand:</strong> ${item.brand}</p>
+                <p><strong>Deskripsi:</strong> ${item.deskripsi || '-'}</p>
+                <p><strong>Nama Pengguna:</strong> ${item.namaPengguna || '-'}</p>
+                <p><strong>Divisi:</strong> ${item.divisi || '-'}</p>
+                <p><strong>Kode Unit:</strong> ${item.kodeUnit}</p>
+                <p><strong>Status:</strong> ${item.statusRiwayat}</p>
+                <p><strong>Lokasi:</strong> ${item.lokasi || '-'}</p>
+                <p><strong>Tanggal Pembelian:</strong> ${item.tanggalPembelian || '-'}</p>
+                <p><strong>Tahun:</strong> ${item.tahunPengadaan}</p>
+                <p><strong>Keterangan:</strong> ${item.keterangan || '-'}</p>
+            `;
+            
+            // Tampilkan modal
+            document.getElementById("barcodeModal").classList.remove("hidden");
+        }
+
+        function tutupModal() {
+            document.getElementById("barcodeModal").classList.add("hidden");
+        }
+
+        async function cetakBarcode() {
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Dapatkan elemen SVG barcode
+        const svgElement = document.getElementById("barcode");
+        
+        // Buat canvas sebagai perantara
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        
+        // Konversi SVG ke PNG menggunakan canvg
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const img = new Image();
+        
+        img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            // Tambahkan barcode ke PDF
+            doc.addImage(canvas.toDataURL("image/png"), 'PNG', 10, 10, 80, 40);
+            
+            // Tambahkan informasi barang
+            const itemInfo = document.getElementById("itemInfo").textContent;
+            doc.setFontSize(10);
+            doc.text(itemInfo, 10, 60, { maxWidth: 180 });
+            
+            // Simpan PDF
+            doc.save("barcode.pdf");
+        };
+        
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+    } catch (error) {
+        console.error("Error generating barcode:", error);
+        alert("Gagal mencetak barcode. Silakan coba lagi.");
+    }
+}
+
+async function cetakSemuaBarcode() {
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        let yPos = 10;
+        let xPos = 10;
+        
+        for (let i = 0; i < dataAlat.length; i++) {
+            const item = dataAlat[i];
+            
+            // Buat elemen SVG sementara
+            const tempSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            tempSvg.setAttribute("width", "200");
+            tempSvg.setAttribute("height", "100");
+            
+            // Generate barcode
+            JsBarcode(tempSvg, item.kodeBarang, {
+                format: "CODE128",
+                lineColor: "#000",
+                width: 1.5,
+                height: 40,
+                displayValue: true
+            });
+            
+            // Buat canvas sebagai perantara
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            
+            // Konversi SVG ke PNG
+            const svgData = new XMLSerializer().serializeToString(tempSvg);
+            const img = new Image();
+            
+            await new Promise((resolve) => {
+                img.onload = resolve;
+                img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+            });
+            
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            // Tambahkan barcode ke PDF
+            doc.addImage(canvas.toDataURL("image/png"), 'PNG', xPos, yPos, 90, 40);
+            doc.setFontSize(8);
+            doc.text(`${item.kodeBarang} - ${item.namaBarang}`, xPos, yPos + 45);
+            
+            // Atur posisi untuk barcode berikutnya
+            if (xPos === 10) {
+                xPos = 110;
+            } else {
+                xPos = 10;
+                yPos += 60;
+                
+                // Jika tidak cukup ruang, buat halaman baru
+                if (yPos > doc.internal.pageSize.height - 30) {
+                    doc.addPage();
+                    yPos = 10;
+                }
+            }
+        }
+        
+        doc.save("semua_barcode.pdf");
+    } catch (error) {
+        console.error("Error generating all barcodes:", error);
+        alert("Gagal mencetak semua barcode. Silakan coba lagi.");
+    }
+}
         function cetakPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -311,12 +495,17 @@
                 "Kode Barang", 
                 "Nama Barang", 
                 "Brand", 
+                "Deskripsi",
+                "Nama Pengguna",
+                "Divisi",
                 "Kode Unit", 
                 "Status Pajak",
                 "Status Riwayat",
                 "Perawatan",
                 "Lokasi",
-                "Tahun"
+                "Tanggal Pembelian",
+                "Tahun",
+                "Keterangan"
             ];
             
             const data = dataTampil.map(item => [
@@ -324,12 +513,17 @@
                 item.kodeBarang,
                 item.namaBarang,
                 item.brand,
+                item.deskripsi || '-',
+                item.namaPengguna || '-',
+                item.divisi || '-',
                 item.kodeUnit,
                 item.statusPajak,
                 item.statusRiwayat,
                 item.perawatan || '-',
                 item.lokasi || '-',
-                item.tahunPengadaan
+                item.tanggalPembelian || '-',
+                item.tahunPengadaan,
+                item.keterangan || '-'
             ]);
             
             doc.autoTable({
@@ -346,8 +540,8 @@
                     fillColor: [245, 245, 245]
                 },
                 styles: {
-                    fontSize: 8,
-                    cellPadding: 2,
+                    fontSize: 7,
+                    cellPadding: 1,
                     overflow: 'linebreak'
                 },
                 margin: { top: 30 }
